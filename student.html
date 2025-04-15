@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>MIT AOE Solver</title> 
+  <link rel="stylesheet" href="style.css">
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+  <script src="script.js"></script>
+</head>
+<body>
+  <!-- Sidebar -->
+  <nav id="sidebar">
+    <ul>
+      <li><a href="#" onclick="showSection('askDoubtSection')">Ask Doubt</a></li>
+      <li><a href="#" onclick="showSection('recentDoubtSection')">Recent Doubts</a></li>
+      <li><a href="#" onclick="showSection('contactSection')">Contact</a></li>
+    </ul>
+  </nav>
+
+  <!-- Header -->
+  <header>MIT AOE Solver</header>
+
+  <!-- Ask Doubt Section -->
+  <section id="askDoubtSection">
+    <button id="askDoubtBtn" onclick="toggleSubjects()">ASK DOUBT</button>
+    <div id="subjectList" style="display: none;">
+      <button onclick="showQuestionForm('Physics')">Physics</button>
+      <button onclick="showQuestionForm('Chemistry')">Chemistry</button>
+      <button onclick="showQuestionForm('Electronics')">Electronics</button>
+      <button onclick="showQuestionForm('Mechanics')">Mechanics</button>
+    </div>
+    <div id="questionForm" style="display: none; margin-top: 20px; text-align: center;">
+      <h3 id="selectedSubjectTitle"></h3>
+      <textarea id="questionInput" placeholder="Type your question here..." rows="4" style="width: 90%; max-width: 500px;"></textarea>
+      <br><br>
+      <input type="file" id="imageUpload" accept="image/*" onchange="previewImage()">
+      <br><br>
+      <label><input type="checkbox" id="prefAI"> AI</label>
+      <label><input type="checkbox" id="prefTeacher"> Teacher</label>
+      <label><input type="checkbox" id="prefPeers"> Peers</label>
+      <br><br>
+      <button onclick="submitQuestion()">Submit Question</button>
+    </div>
+  </section>
+
+  <!-- Recent Doubts Section -->
+  <section id="recentDoubtSection" style="display: none;">
+    <h2>Recent Doubts</h2>
+    <div id="recentDoubtsContainer">
+      <div class="question-box"><p><strong>Q1:</strong> What is Ohm's Law?</p></div>
+      <div class="question-box"><p><strong>Q2:</strong> Explain Newton's 3rd Law with example.</p></div>
+    </div>
+  </section>
+
+  <!-- Answer Section -->
+  <section id="answerSection" style="display: none;">
+    <div class="answer-page">
+      <div class="question-box">
+        <div class="question-text">
+          <h2>Question:</h2>
+          <p id="displayedQuestion"></p>
+        </div>
+        <div class="image-preview" id="imagePreviewBox" style="display: none;">
+          <img id="displayedImage" alt="Uploaded" />
+        </div>
+      </div>
+
+      <div id="answersContainer">
+        <div id="aiAnswer" class="answer-block" style="display: none;">
+          <h3>🤖 Answer by AI</h3>
+          <p>This is an auto-generated response from the AI.</p>
+          <div class="vote-buttons">
+            <button onclick="vote('ai','up')">👍 <span id="aiUp">0</span></button>
+            <button onclick="vote('ai','down')">👎 <span id="aiDown">0</span></button>
+          </div>
+        </div>
+
+        <div id="teacherAnswer" class="answer-block" style="display: none;">
+          <h3>👩‍🏫 Answer by Teacher</h3>
+          <div class="answer-form">
+            <textarea id="teacherInput" placeholder="Teacher's answer..."></textarea>
+            <button onclick="postTeacherAnswer()">Submit</button>
+          </div>
+          <p id="teacherAnswerText"></p>
+          <div class="vote-buttons">
+            <button onclick="vote('teacher','up')">👍 <span id="teacherUp">0</span></button>
+            <button onclick="vote('teacher','down')">👎 <span id="teacherDown">0</span></button>
+          </div>
+        </div>
+
+        <div id="peersAnswer" class="answer-block" style="display: none;">
+          <h3>👥 Answer by Peers</h3>
+          <div class="answer-form">
+            <textarea id="peerInput" placeholder="Peer's answer..."></textarea>
+            <button onclick="postPeerAnswer()">Submit</button>
+          </div>
+          <p id="peerAnswerText"></p>
+          <div class="vote-buttons">
+            <button onclick="vote('peer','up')">👍 <span id="peerUp">0</span></button>
+            <button onclick="vote('peer','down')">👎 <span id="peerDown">0</span></button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Contact Section -->
+  <section id="contactSection" style="display: none;">
+    <h3>Contact Support</h3>
+    <form action="https://formspree.io/f/xpwpynak" method="POST">
+      <input type="email" name="email" placeholder="Your Email" required />
+      <textarea name="message" placeholder="Your Comment" required></textarea>
+      <button type="submit">Send</button>
+    </form>
+    <p class="social-links">
+      <a href="https://twitter.com/Neeraj_chopra1" target="_blank">🐦 Twitter</a> |
+      <a href="https://discord.com" target="_blank">💬 Discord</a> |
+      <a href="https://reddit.com" target="_blank">👥 Reddit</a>
+    </p>
+  </section>
+
+  <!-- Script -->
+  <script>
+    let votes = {
+      ai: { up: 0, down: 0 },
+      teacher: { up: 0, down: 0 },
+      peer: { up: 0, down: 0 }
+    };
+
+    function toggleSubjects() {
+      const list = document.getElementById('subjectList');
+      list.style.display = list.style.display === 'none' ? 'block' : 'none';
+    }
+
+    function showQuestionForm(subject) {
+      document.getElementById('questionForm').style.display = 'block';
+      document.getElementById('selectedSubjectTitle').textContent = `Subject: ${subject}`;
+    }
+
+    function submitQuestion() {
+      const questionText = document.getElementById('questionInput').value;
+      const file = document.getElementById('imageUpload').files[0];
+      const useAI = document.getElementById('prefAI').checked;
+      const useTeacher = document.getElementById('prefTeacher').checked;
+      const usePeers = document.getElementById('prefPeers').checked;
+
+      if (!questionText.trim()) {
+        alert("Please type a question.");
+        return;
+      }
+
+      document.getElementById('askDoubtSection').style.display = 'none';
+      document.getElementById('answerSection').style.display = 'block';
+      document.getElementById('displayedQuestion').textContent = questionText;
+
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          document.getElementById('imagePreviewBox').style.display = 'block';
+          document.getElementById('displayedImage').src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+      } else {
+        document.getElementById('imagePreviewBox').style.display = 'none';
+      }
+
+      // Show the answer blocks based on preference
+      if (useAI) document.getElementById('aiAnswer').style.display = 'block';
+      if (useTeacher) document.getElementById('teacherAnswer').style.display = 'block';
+      if (usePeers) document.getElementById('peersAnswer').style.display = 'block';
+    }
+
+    function postTeacherAnswer() {
+      const ans = document.getElementById('teacherInput').value.trim();
+      if (ans) document.getElementById('teacherAnswerText').textContent = ans;
+    }
+
+    function postPeerAnswer() {
+      const ans = document.getElementById('peerInput').value.trim();
+      if (ans) document.getElementById('peerAnswerText').textContent = ans;
+    }
+
+    function vote(who, type) {
+      votes[who][type]++;
+      document.getElementById(`${who}${type.charAt(0).toUpperCase() + type.slice(1)}`).textContent = votes[who][type];
+    }
+
+    function previewImage() {
+      const file = document.getElementById('imageUpload').files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          document.getElementById('displayedImage').src = e.target.result;
+          document.getElementById('imagePreviewBox').style.display = 'block';
+        };
+        reader.readAsDataURL(file);
+      }
+    }
+
+    function showSection(sectionId) {
+      ['askDoubtSection', 'recentDoubtSection', 'contactSection'].forEach(id => {
+        document.getElementById(id).style.display = id === sectionId ? 'block' : 'none';
+      });
+    }
+  </script>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'92c301e8ba34adc9',t:'MTc0Mzk2MDU2Ny4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>

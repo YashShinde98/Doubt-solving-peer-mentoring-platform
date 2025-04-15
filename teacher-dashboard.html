@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Teacher Dashboard - MIT AOE Solver</title>
+  <link rel="stylesheet" href="style.css" />
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      padding: 30px;
+    }
+    h1 {
+      color: #333;
+      margin-bottom: 30px;
+    }
+    .subject-buttons button {
+      margin: 10px;
+      padding: 15px 25px;
+      font-size: 16px;
+      border: none;
+      border-radius: 10px;
+      background-color: #007bff;
+      color: white;
+      cursor: pointer;
+    }
+    #questionList {
+      margin-top: 30px;
+      text-align: left;
+      max-width: 700px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    .question-box {
+      background: #f1f1f1;
+      padding: 15px;
+      margin-bottom: 20px;
+      border-radius: 8px;
+    }
+    .answer-button {
+      margin-top: 10px;
+      background-color: green;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    textarea {
+      width: 100%;
+      border-radius: 6px;
+      padding: 8px;
+      font-size: 14px;
+      resize: vertical;
+    }
+    .question-image {
+      max-width: 100%;
+      margin-top: 10px;
+    }
+  </style>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+  <script src="script.js"></script>
+</head>
+<body>
+  <h1>MIT AOE Solver - Teacher Dashboard</h1>
+
+  <div class="subject-buttons">
+    <button onclick="loadQuestions('Physics')">Physics</button>
+    <button onclick="loadQuestions('Chemistry')">Chemistry</button>
+    <button onclick="loadQuestions('Electronics')">Electronics</button>
+    <button onclick="loadQuestions('Mechanics')">Mechanics</button>
+  </div>
+
+  <div id="questionList">
+    <!-- Questions will appear here -->
+  </div>
+
+  <script>
+    // Explicit Firebase initialization for this page
+    const firebaseConfig = {
+      apiKey: "YOUR_API_KEY",
+      authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+      projectId: "YOUR_PROJECT_ID",
+      storageBucket: "YOUR_PROJECT_ID.appspot.com",
+      messagingSenderId: "YOUR_SENDER_ID",
+      appId: "YOUR_APP_ID"
+    };
+    if (!firebase.apps.length) {
+      firebase.initializeApp(firebaseConfig);
+    }
+    const db = firebase.firestore();
+
+    let currentListener = null; // To detach previous listeners
+
+    function loadQuestions(subject) {
+      const container = document.getElementById("questionList");
+      const normalizedSubject = subject.trim().toLowerCase(); // Case-insensitive matching
+      container.innerHTML = `<h2>${subject} Questions</h2>`;
+      console.log("Fetching questions for subject (normalized):", normalizedSubject); // Debug
+
+      // Detach previous listener if exists
+      if (currentListener) {
+        currentListener();
+        console.log("Detached previous listener.");
+      }
+
+      currentListener = db.collection("doubts")
+        .where("subject", ">=", normalizedSubject)
+        .where("subject", "<=", normalizedSubject + "\uf8ff") // Case-insensitive range query
+        .orderBy("subject") // Temporary orderBy to avoid index issue
+        .onSnapshot(snapshot => {
+          console.log("Snapshot received, documents found:", snapshot.size); // Debug
+          if (snapshot.empty) {
+            console.log("No documents found for subject:", normalizedSubject);
+            // Fallback to fetch all and filter manually
+            db.collection("doubts").get().then(allSnapshot => {
+              const matchingDocs = allSnapshot.docs.filter(doc => 
+                doc.data().subject.trim().toLowerCase() === normalizedSubject
+              );
+              console.log("Manual filter found:", matchingDocs.length);
+              if (matchingDocs.length === 0) {
+                container.innerHTML = `<h2>${subject} Questions</h2><p>No questions found for this subject.</p>`;
+              } else {
+                container.innerHTML = `<h2>${subject} Questions</h2>`;
+                matchingDocs.forEach(doc => {
+                  const data = doc.data();
+                  const qId = doc.id;
+                  const answerInputId = `answer_${qId}`;
+                  const answerDisplayId = `display_${qId}`;
+
+                  const box = document.createElement("div");
+                  box.className = "question-box";
+                  box.innerHTML = `
+                    <strong>Q:</strong> ${data.question}<br/>
+                    ${data.image ? `<img src="${data.image}" class="question-image" />` : ''}
+                    ${data.teacherAnswer ? `<p><strong>Answer:</strong> ${data.teacherAnswer}</p>` : `
+                      <textarea id="${answerInputId}" rows="3" placeholder="Type your answer..."></textarea><br/>
+                      <button class="answer-button" onclick="submitTeacherAnswer('${qId}', '${answerInputId}', '${answerDisplayId}')">Submit Answer ✅</button>
+                      <div id="${answerDisplayId}" style="margin-top: 10px; color: green;"></div>
+                    `}
+                  `;
+                  container.appendChild(box);
+                });
+              }
+            }).catch(error => {
+              console.error("Error in fallback query:", error);
+            });
+            return;
+          }
+
+          container.innerHTML = `<h2>${subject} Questions</h2>`; // Reset content
+          snapshot.forEach(doc => {
+            const data = doc.data();
+            const qId = doc.id;
+            const answerInputId = `answer_${qId}`;
+            const answerDisplayId = `display_${qId}`;
+
+            const box = document.createElement("div");
+            box.className = "question-box";
+            box.innerHTML = `
+              <strong>Q:</strong> ${data.question}<br/>
+              ${data.image ? `<img src="${data.image}" class="question-image" />` : ''}
+              ${data.teacherAnswer ? `<p><strong>Answer:</strong> ${data.teacherAnswer}</p>` : `
+                <textarea id="${answerInputId}" rows="3" placeholder="Type your answer..."></textarea><br/>
+                <button class="answer-button" onclick="submitTeacherAnswer('${qId}', '${answerInputId}', '${answerDisplayId}')">Submit Answer ✅</button>
+                <div id="${answerDisplayId}" style="margin-top: 10px; color: green;"></div>
+              `}
+            `;
+            container.appendChild(box);
+          });
+        }, error => {
+          console.error("Error loading questions:", error.message);
+          if (error.code === 'permission-denied') {
+            container.innerHTML = `<h2>${subject} Questions</h2><p>Permission denied. Check Firestore rules.</p>`;
+          } else if (error.code === 'failed-precondition') {
+            container.innerHTML = `<h2>${subject} Questions</h2><p>Missing index for orderBy. Create index via Firestore console link.</p>`;
+          } else {
+            container.innerHTML = `<h2>${subject} Questions</h2><p>Error: ${error.message}</p>`;
+          }
+        });
+    }
+
+    function submitTeacherAnswer(docId, inputId, displayId) {
+      const answerText = document.getElementById(inputId).value.trim();
+      const displayDiv = document.getElementById(displayId);
+
+      if (answerText === "") {
+        alert("Please type an answer before submitting.");
+        return;
+      }
+
+      db.collection("doubts").doc(docId).update({
+        teacherAnswer: answerText,
+        answeredBy: "Teacher",
+        "upvotes.teacher": 0
+      }).then(() => {
+        displayDiv.innerHTML = `<strong>👩‍🏫 Answer (Verified Teacher):</strong><br/>${answerText}`;
+        document.getElementById(inputId).style.display = 'none';
+        document.querySelector(`button[onclick*="${docId}"]`).style.display = 'none';
+      }).catch(error => {
+        console.error("Error saving answer:", error);
+      });
+    }
+
+    // Initialize with default subject (optional)
+    document.addEventListener('DOMContentLoaded', () => {
+      loadQuestions('Physics'); // Load Physics by default on page load
+    });
+  </script>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'92c301e8bf0012f5',t:'MTc0Mzk2MDU2Ny4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>
